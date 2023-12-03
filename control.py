@@ -326,8 +326,7 @@ class PIMANAGER():
         GPIO.output(self._redLEDPin, 1)
         GPIO.output(self._greenLEDPin, 0)
         for host in self._hosts:
-            self._hosts[host]['thread'].queue.put('rebootlocal')        
-        return
+            self._hosts[host]['thread'].queue.put('rebootlocal')
         command = '/usr/bin/sudo reboot'
         import subprocess
         process = subprocess.Popen(command.split(), stdout=subprocess.PIPE)
