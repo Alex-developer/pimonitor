@@ -20,12 +20,13 @@ import time
 import queue
 import picontrolslave
 import signal
+import RPi.GPIO as GPIO
 
 import hosts
 
 class PICONTROL(threading.Thread) :
     OLEDWIDTH = 128
-    STATES = Enum('STATE', 'Error Connecting Connected Installing Running Shutdown Pause Terminated')
+    STATES = Enum('STATE', 'Error Connecting Connected Installing Running Shutdown Pause Terminated LocalReboot')
     _state = STATES.Connecting
     _load = '??'
     _cpuTemp = '??'
@@ -79,6 +80,8 @@ class PICONTROL(threading.Thread) :
                             time.sleep(0.5)
                         if val == 'terminate':
                             self._state = self.STATES.Terminated
+                        if val == 'rebootlocal':
+                            self._state =self.STATES.LocalReboot
                     except Empty:
                         pass
                     time.sleep(1)
@@ -243,6 +246,12 @@ class PICONTROL(threading.Thread) :
                 x = self._getCenter(draw, 'Terminated', font=messageFont)
                 draw.text((x, margin_y_line[2]), 'Terminated', font=messageFont, fill='white')
 
+            if self._state == self.STATES.LocalReboot:
+                x = self._getCenter(draw, 'Host', font=messageFont)
+                draw.text((x, margin_y_line[2]), 'Host', font=messageFont, fill='white')
+                x = self._getCenter(draw, 'Reboot', font=messageFont)
+                draw.text((x, margin_y_line[3]), 'Reboot', font=messageFont, fill='white')
+                
                                                 
         if self._state == self.STATES.Error:
             while True:
@@ -263,13 +272,22 @@ class PIMANAGER():
     
     _running = True
     _panicButton = None
+    _rebootButton = None
     _voice = None    
     _hosts = None
+    _greenLEDPin = 20
+    _redLEDPin = 21
 
     def __init__(self, hosts):
         self._hosts = hosts
         self._panicButton = Button(14)    
         self._panicButton.when_pressed = self.panicPressed
+        GPIO.setup(27, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+        self._rebootButton = Button(27)    
+        self._rebootButton.when_pressed = self.rebootPressed
+                
+        GPIO.setup(self._greenLEDPin, GPIO.OUT, initial=1)
+        GPIO.setup(self._redLEDPin, GPIO.OUT, initial=0)
         
         try:
             self._voice = DFRobot_DF2301Q_I2C(i2c_addr=DF2301Q_I2C_ADDR, bus=1)
@@ -304,6 +322,17 @@ class PIMANAGER():
                         self.terminate()
             time.sleep(0.5)
 
+    def rebootPressed(self):
+        GPIO.output(self._redLEDPin, 1)
+        GPIO.output(self._greenLEDPin, 0)
+        for host in self._hosts:
+            self._hosts[host]['thread'].queue.put('rebootlocal')        
+        return
+        command = '/usr/bin/sudo reboot'
+        import subprocess
+        process = subprocess.Popen(command.split(), stdout=subprocess.PIPE)
+        output = process.communicate()[0]
+    
     def panicPressed(self):
         for host in self._hosts:
             self._hosts[host]['thread'].queue.put('shutdown')
