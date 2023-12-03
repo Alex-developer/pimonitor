@@ -14,7 +14,6 @@ GPIO.setup(redLEDPin, GPIO.OUT, initial=0)
 def shut_down():
     GPIO.output(redLEDPin, 1)
     GPIO.output(greenLEDPin, 0)  
-    return 
     command = '/usr/bin/sudo reboot'
     import subprocess
     process = subprocess.Popen(command.split(), stdout=subprocess.PIPE)

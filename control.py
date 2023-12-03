@@ -45,44 +45,46 @@ class PICONTROL(threading.Thread) :
     def run(self) :
 
         while self._state is not self.STATES.Terminated:
-                        
-            self._updateDisplay()
-
-            if self._state == self.STATES.Connecting:                
-                self._connect()
-
-            if self._state == self.STATES.Running:
-                count = 1
-                if self._getLoad():
-                    if self._getTemp():
-                        if self._getAllskyStatus():
-                            self._updateDisplay()
-                        
-            if self._state == self.STATES.Shutdown:
+            try:          
                 self._updateDisplay()
-                stdout, stderr = self._runCommand(f"{self._host['home']}/picontrolslave.py -s")
-                self._state = self.STATES.Pause
+
+                if self._state == self.STATES.Connecting:                
+                    self._connect()
+
+                if self._state == self.STATES.Running:
+                    count = 1
+                    if self._getLoad():
+                        if self._getTemp():
+                            if self._getAllskyStatus():
+                                self._updateDisplay()
+                            
+                if self._state == self.STATES.Shutdown:
+                    self._updateDisplay()
+                    stdout, stderr = self._runCommand(f"{self._host['home']}/picontrolslave.py -s")
+                    self._state = self.STATES.Pause
+                    
+                if self._state == self.STATES.Pause:
+                    self._updateDisplay()
+                    time.sleep(20)
+                    self._state = self.STATES.Connecting
+                    
+                if self._state is not self.STATES.Terminated:
+                    try:
+                        val = self.queue.get(block=False)
+                        if val == 'shutdown':
+                            self.queue.task_done()
+                            with self.queue.mutex:
+                                self.queue.queue.clear()
+                            self._state = self.STATES.Shutdown
+                            time.sleep(0.5)
+                        if val == 'terminate':
+                            self._state = self.STATES.Terminated
+                    except Empty:
+                        pass
+                    time.sleep(1)
+            except Exception as error:
+                print(f'Something broke on {self.name}: ', error)
                 
-            if self._state == self.STATES.Pause:
-                self._updateDisplay()
-                time.sleep(20)
-                self._state = self.STATES.Connecting
-                
-            if self._state is not self.STATES.Terminated:
-                try:
-                    val = self.queue.get(block=False)
-                    if val == 'shutdown':
-                        self.queue.task_done()
-                        with self.queue.mutex:
-                            self.queue.queue.clear()
-                        self._state = self.STATES.Shutdown
-                        time.sleep(0.5)
-                    if val == 'terminate':
-                        self._state = self.STATES.Terminated
-                except Empty:
-                    pass
-                time.sleep(1)
- 
         self._state = self.STATES.Terminated
         self._updateDisplay()
         
